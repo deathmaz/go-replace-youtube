@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"log"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
+
+	"github.com/skratchdot/open-golang/open"
 )
 
 func main() {
@@ -16,41 +17,49 @@ func main() {
 			log.Fatal(err)
 		}
 
-		// https://youtu.be/xxxxxx
-		isShortForm := strings.Contains(u.Host, "youtu.be")
-
-		// https://www.youtube.com/watch?v=xxxxx
-		isLongForm := strings.Contains(u.Host, "youtube")
-
-		if !isShortForm && !isLongForm {
-			fmt.Println("The given url can't be processed!")
+		videoId, err := getVideoId(u)
+		if err != nil {
+			log.Fatal(err)
 			return
 		}
-		var videoId string
-		queryVideoId := u.Query().Get("v")
 
-		if isShortForm {
-			videoId = strings.TrimPrefix(u.Path, "/")
-		} else if queryVideoId != "" {
-			videoId = queryVideoId
-		}
-
-		if len(videoId) != 0 {
-			openUrl(videoId)
+		err = openUrl(videoId)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 }
 
-func openUrl(videoId string) {
+func getVideoId(u *url.URL) (string, error) {
+	// https://youtu.be/xxxxxx
+	isShortForm := strings.Contains(u.Host, "youtu.be")
+
+	// https://www.youtube.com/watch?v=xxxxx
+	isLongForm := strings.Contains(u.Host, "youtube")
+
+	if !isShortForm && !isLongForm {
+		return "", errors.New("The given url can't be processed!")
+	}
+	var videoId string
+	queryVideoId := u.Query().Get("v")
+
+	if isShortForm {
+		videoId = strings.TrimPrefix(u.Path, "/")
+	} else if queryVideoId != "" {
+		videoId = queryVideoId
+	}
+
+	if videoId == "" {
+		return "", errors.New("Video id can't be parsed")
+	}
+
+	return videoId, nil
+}
+
+func openUrl(videoId string) error {
 	url := os.Getenv("RY_URL")
 	if url == "" {
-		log.Fatal("RY_URL variable is not set!")
+		return errors.New("RY_URL variable is not set!")
 	}
-	out, err := exec.Command("xdg-open", url+videoId).Output()
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		output := string(out[:])
-		fmt.Println(output)
-	}
+	return open.Run(url + videoId)
 }
